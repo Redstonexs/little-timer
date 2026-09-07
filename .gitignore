@@ -1,0 +1,10 @@
+/build/
+/dist/
+/.tools/
+*.ini
+*.obj
+*.o
+*.pdb
+*.ilk
+__pycache__/
+

@@ -1,0 +1,53 @@
+PASS real 32-bit Win32 application initializes
+PASS control.png
+PASS settings available before start
+PASS real start button starts timer
+PASS running round cannot be reconfigured
+PASS real pause button pauses timer
+PASS real reset button resets timer
+PASS Space starts timer
+PASS held Space does not repeatedly toggle timer
+PASS Space pauses timer
+PASS F11 enters clean presentation mode
+PASS presentation mode hides operator controls
+PASS Esc restores control window
+PASS mute button mutes
+PASS F10 handles Windows system-key messages
+PASS independent audience window opens
+PASS audience is not hidden by minimizing controller
+PASS fullscreen removes frame
+PASS fullscreen restores window placement
+PASS stage.png
+PASS stage-4x3.png
+PASS five-minute reminder and warning stage
+PASS stage-warning.png
+PASS end cue and overtime stage
+PASS stage-overtime.png
+PASS control-overtime.png
+PASS stage-hours.png
+PASS native dialog automation hook available
+PASS settings capture contains rendered pixels
+PASS settings dialog renders
+PASS invalid reminders keep settings open
+PASS invalid reminders focus relevant input
+PASS valid settings apply through real dialog
+PASS cancel preserves previous settings
+PASS portable settings saved to chosen folder
+PASS UTF-8 Chinese configuration restores from disk
+PASS disabling persistence removes app configuration
+PASS muted playback does not acquire audio device
+INFO Windows audio output devices: 1
+PASS real audio device queues PCM buffer
+PASS interrupting sound safely replaces queued buffer
+PASS completed audio releases buffer and device
+PASS audio device can reopen after completion
+PASS reset cancels active audio
+PASS generated audio exported as PCM WAV
+PASS generated audio exported as PCM WAV
+PASS stage-small.png
+PASS repainting does not leak GDI objects
+PASS closing audience keeps controller alive
+PASS audience can reopen
+PASS closing application releases both windows
+
+50 checks, 0 failures
