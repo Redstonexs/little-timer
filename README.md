@@ -6,7 +6,7 @@
 
 ## 直接使用
 
-打开 `dist/LittleTimer.exe`。不需要安装、管理员权限、网络、.NET、浏览器或额外的音效文件，可从 U 盘运行。
+从 [Releases](https://github.com/Redstonexs/little-timer/releases) 下载 `LittleTimer.exe` 并打开；本地构建产物位于 `dist/LittleTimer.exe`。不需要安装、管理员权限、网络、.NET、浏览器或额外的音效文件，可从 U 盘运行。
 
 1. 点「设置」，填写演讲时长和提醒点，分别试听两种声音。
 2. 点「开始计时」，或按 **Space** 开始 / 暂停。
@@ -115,7 +115,17 @@ bash scripts/build-mingw.sh --qa
 
 原生验证程序在屏幕外创建本程序的窗口，测试按钮、设置、投屏、全屏、音频和资源释放，并导出本程序界面截图。音频设备测试提交静音 PCM；`gentle.wav` / `end.wav` 仅作为试听样本导出。`LittleTimerQA.exe` 不属于发布产物。
 
-GitHub Actions 工作流包含交叉编译、核心测试、PE 检查和 Windows 原生窗口检查；仓库推送后可从 Actions 获取构建产物。
+GitHub Actions 的 `build.yml` 包含交叉编译、核心测试、PE 检查和 Windows 原生窗口检查；分支推送或 PR 后可从 Actions 获取构建产物。`release.yml` 复用整套检查，全部通过后自动发布 EXE 和 SHA-256 校验文件。
+
+## 发布新版本
+
+1. 将 `CMakeLists.txt`、`resources/app.rc`（数字与字符串版本）、`resources/app.manifest` 中的版本改为目标版本。
+2. 添加对应的 `docs/releases/vX.Y.Z.md` 发布说明，运行 `python3 scripts/check-version.py vX.Y.Z`。
+3. 提交并推送上述改动，再创建并推送 `vX.Y.Z` 标签。版本号必须与标签一致，首个版本为 `v0.0.1`。
+
+标签推送触发 Release 工作流。它先检查版本号和发布说明，再等待 Linux 构建、测试、PE 检查及 Windows 原生验证全部成功，最后校验下载的产物并创建 GitHub Release。发布作业使用内置 `GITHUB_TOKEN` 的 `contents: write` 权限，无需额外配置密钥。
+
+也可用 `gh workflow run release.yml --ref vX.Y.Z` 对已有标签手动触发。在分支上触发会报错；已发布版本不会被覆盖。失败的构建可在 Actions 中重跑，修复源码则应提交改动并使用新的版本标签。
 
 ## 许可证
 

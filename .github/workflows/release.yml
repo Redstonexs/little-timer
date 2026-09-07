@@ -1,0 +1,74 @@
+name: Release
+run-name: Release ${{ github.ref_name }}
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  version:
+    name: Verify release version
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Verify tag, embedded versions and release notes
+        env:
+          RELEASE_REF_TYPE: ${{ github.ref_type }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          if [[ "$RELEASE_REF_TYPE" != tag ]]; then
+            echo '::error::Run this workflow on an existing vMAJOR.MINOR.PATCH tag.'
+            exit 1
+          fi
+          python3 scripts/check-version.py "$RELEASE_TAG"
+
+  build:
+    name: Build and test release
+    needs: version
+    uses: ./.github/workflows/build.yml
+
+  publish:
+    name: Publish GitHub Release
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Download the tested executable
+        uses: actions/download-artifact@v4
+        with:
+          name: LittleTimer-portable-win32
+          path: release
+      - name: Verify downloaded checksum
+        working-directory: release/dist
+        run: sha256sum --check LittleTimer.exe.sha256
+      - name: Verify downloaded PE packaging
+        run: python3 scripts/verify-pe.py release/dist/LittleTimer.exe
+      - name: Publish executable and checksum
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          gh release create "$RELEASE_TAG" \
+            release/dist/LittleTimer.exe \
+            release/dist/LittleTimer.exe.sha256 \
+            --verify-tag \
+            --title "Little Timer $RELEASE_TAG" \
+            --notes-file "docs/releases/$RELEASE_TAG.md"

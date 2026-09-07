@@ -2,8 +2,11 @@ name: Build portable Windows timer
 
 on:
   push:
+    branches:
+      - '**'
   pull_request:
   workflow_dispatch:
+  workflow_call:
 
 permissions:
   contents: read
@@ -11,6 +14,7 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-24.04
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - name: Install cross compiler
@@ -21,16 +25,22 @@ jobs:
         run: bash scripts/build-mingw.sh --qa
       - name: Verify portable PE packaging
         run: python3 scripts/verify-pe.py dist/LittleTimer.exe --report build/pe-report.json
+      - name: Generate executable checksum
+        working-directory: dist
+        run: sha256sum LittleTimer.exe > LittleTimer.exe.sha256
       - uses: actions/upload-artifact@v4
         with:
           name: LittleTimer-portable-win32
+          if-no-files-found: error
           path: |
             dist/LittleTimer.exe
+            dist/LittleTimer.exe.sha256
             README.md
             LICENSE
       - uses: actions/upload-artifact@v4
         with:
           name: native-test-tools
+          if-no-files-found: error
           path: |
             build/LittleTimerQA.exe
             build/timer_tests.exe
@@ -39,6 +49,7 @@ jobs:
   windows:
     needs: build
     runs-on: windows-2022
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4

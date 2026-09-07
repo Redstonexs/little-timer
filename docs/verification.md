@@ -6,6 +6,7 @@
 
 - Linux：GCC 15.2 的 AddressSanitizer / UndefinedBehaviorSanitizer 核心测试。
 - Windows：Windows 11，系统版本 `10.0.26200.9168`，运行 MinGW-w64 交叉编译的 x86 EXE。
+- GitHub Actions：Ubuntu 24.04 构建与 Windows Server 2022 原生验证已在[远端工作流](https://github.com/Redstonexs/little-timer/actions/runs/34106202209)通过。
 - 图形：真实 Win32 窗口与设置对话框、GDI+ 渲染，覆盖 1920×1080、1024×768、800×600、640×480 输出。
 - 音频：真实 Windows 音频输出设备，使用静音 PCM 检查异步提交、打断播放、完成后释放与重新打开。
 - 包装：通过 `scripts/verify-pe.py` 检查 PE32、GUI 子系统 6.1、ASLR / DEP、内置清单和系统 DLL 依赖。
@@ -25,7 +26,7 @@ python3 scripts/verify-pe.py dist/LittleTimer.exe --report build/pe-report.json
 - Windows 7 实机 / 虚拟机启动、显示和音频播放。
 - Windows 8 / 8.1 / 10 实机运行。
 - 实际会场的双显示器布局、不同 DPI 组合，以及投影仪 / HDMI 扬声器音量。
-- CMake / MSVC 构建路径和远端 GitHub Actions 运行结果。
+- CMake / MSVC 构建路径。
 
 Windows 7 兼容性目前由 x86 产物、6.1 子系统、旧版系统接口和系统 DLL 导入检查支撑。导入检查不能替代目标系统运行测试，也不对任意第三方音频驱动、精简系统或系统字体缺失作保证。
 
