@@ -16,6 +16,12 @@ int checks = 0;
 std::wstring outputDirectory;
 int dialogPass = 0;
 
+LRESULT CALLBACK countTextChanges(HWND hwnd, UINT message, WPARAM wp, LPARAM lp,
+                                  UINT_PTR, DWORD_PTR data) {
+    if (message == WM_SETTEXT) ++*reinterpret_cast<int*>(data);
+    return DefSubclassProc(hwnd, message, wp, lp);
+}
+
 void check(bool condition, const wchar_t* label) {
     ++checks;
     report << (condition ? L"PASS " : L"FAIL ") << label << L"\n";
@@ -68,6 +74,65 @@ void setClientSize(HWND hwnd, int width, int height) {
                       static_cast<DWORD>(GetWindowLongPtrW(hwnd, GWL_EXSTYLE)));
     SetWindowPos(hwnd, nullptr, -20000, -20000, rect.right - rect.left, rect.bottom - rect.top,
                  SWP_NOZORDER | SWP_NOACTIVATE);
+}
+
+void auditRefresh(App& app) {
+    int textChanges = 0;
+    const int ids[] = {Audience, Fullscreen, OpenSettings, Mute, Reset, StartPause};
+    for (int id : ids)
+        SetWindowSubclass(GetDlgItem(app.control.hwnd, id), countTextChanges, 99,
+                          reinterpret_cast<DWORD_PTR>(&textChanges));
+    for (int i = 0; i < 10; ++i) app.refresh();
+    check(textChanges == 0, L"unchanged refresh does not rewrite button labels");
+
+    textChanges = 0;
+    app.command(StartPause, app.control);
+    wchar_t title[64] = {};
+    GetDlgItemTextW(app.control.hwnd, StartPause, title, 64);
+    check(textChanges == 1 && std::wstring(title) == L"暂停",
+          L"state change updates only the affected button label");
+    for (int id : ids) RemoveWindowSubclass(GetDlgItem(app.control.hwnd, id), countTextChanges, 99);
+
+    int captionChanges = 0;
+    SetWindowSubclass(app.control.hwnd, countTextChanges, 99,
+                      reinterpret_cast<DWORD_PTR>(&captionChanges));
+    app.timer.reset();
+    app.timer.start(0);
+    for (int i = 1; i <= 3; ++i) app.tick(i * 1000);
+    check(app.timer.displaySeconds() == 1197 && captionChanges == 0,
+          L"countdown advances without repainting native window caption");
+    RemoveWindowSubclass(app.control.hwnd, countTextChanges, 99);
+    app.timer.reset();
+    app.refresh();
+
+    HDC screen = GetDC(nullptr);
+    HDC dc = CreateCompatibleDC(screen);
+    HBITMAP bitmap = CreateCompatibleBitmap(screen, 200, 60);
+    const auto old = SelectObject(dc, bitmap);
+    const RECT rect = {0, 0, 200, 60};
+    HBRUSH marker = CreateSolidBrush(RGB(255, 0, 255));
+    FillRect(dc, &rect, marker);
+    SendMessageW(GetDlgItem(app.control.hwnd, StartPause), WM_ERASEBKGND,
+                 reinterpret_cast<WPARAM>(dc), 0);
+    check(GetPixel(dc, 20, 20) == RGB(255, 0, 255),
+          L"button erase does not expose an intermediate background frame");
+    SetViewportOrgEx(dc, 10, 5, nullptr);
+    DRAWITEMSTRUCT item = {};
+    item.CtlType = ODT_BUTTON;
+    item.CtlID = StartPause;
+    item.hwndItem = GetDlgItem(app.control.hwnd, StartPause);
+    item.hDC = dc;
+    item.rcItem = {0, 0, 158, 49};
+    SendMessageW(app.control.hwnd, WM_DRAWITEM, StartPause, reinterpret_cast<LPARAM>(&item));
+    check(GetPixel(dc, 0, 0) == ui::kBackground && GetPixel(dc, 157, 48) == ui::kBackground,
+          L"buffered button fully paints corners without dark seams");
+    check(GetPixel(dc, 160, 50) == RGB(255, 0, 255),
+          L"buffered button respects destination viewport and bounds");
+    SelectObject(dc, old);
+    DeleteObject(marker);
+    DeleteObject(bitmap);
+    DeleteDC(dc);
+    ReleaseDC(nullptr, screen);
 }
 
 void captureDialog(HWND hwnd) {
@@ -155,6 +220,7 @@ int runDiagnostics(HINSTANCE instance, const std::wstring& directory) {
     app.scale = 1;
     setClientSize(app.control.hwnd, 1000, 700);
     app.layout(app.control);
+    auditRefresh(app);
     snapshot(app, app.control, 1000, 700, L"control.png");
     check(IsWindowEnabled(GetDlgItem(app.control.hwnd, OpenSettings)), L"settings available before start");
     SendMessageW(GetDlgItem(app.control.hwnd, StartPause), BM_CLICK, 0, 0);
@@ -270,13 +336,20 @@ int runDiagnostics(HINSTANCE instance, const std::wstring& directory) {
     HDC target = CreateCompatibleDC(screen);
     HBITMAP backing = CreateCompatibleBitmap(screen, 640, 480);
     const auto old = SelectObject(target, backing);
-    for (int i = 0; i < 120; ++i) app.paint(app.stage, target, 640, 480);
+    DRAWITEMSTRUCT button = {};
+    button.hwndItem = GetDlgItem(app.control.hwnd, StartPause);
+    button.hDC = target;
+    button.rcItem = {0, 0, 158, 49};
+    for (int i = 0; i < 120; ++i) {
+        app.paint(app.stage, target, 640, 480);
+        ui::button(button, true);
+    }
     SelectObject(target, old);
     DeleteObject(backing);
     DeleteDC(target);
     ReleaseDC(nullptr, screen);
     const DWORD handlesAfter = GetGuiResources(GetCurrentProcess(), GR_GDIOBJECTS);
-    check(handlesAfter <= handlesBefore + 2, L"repainting does not leak GDI objects");
+    check(handlesAfter <= handlesBefore + 2, L"window and button repainting do not leak GDI objects");
     DestroyWindow(app.stage.hwnd);
     check(!app.stage.hwnd && app.control.hwnd, L"closing audience keeps controller alive");
     app.openAudience();

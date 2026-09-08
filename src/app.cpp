@@ -29,22 +29,16 @@ std::wstring readUtf8(const std::wstring& path) {
     return result;
 }
 
-LRESULT CALLBACK buttonProcedure(HWND hwnd, UINT message, WPARAM wp, LPARAM lp,
-                                 UINT_PTR, DWORD_PTR) {
-    if (message == WM_MOUSEMOVE) {
-        TRACKMOUSEEVENT tracking = {sizeof(tracking), TME_LEAVE, hwnd, 0};
-        TrackMouseEvent(&tracking);
-        InvalidateRect(hwnd, nullptr, FALSE);
-    } else if (message == WM_MOUSELEAVE || message == WM_SETFOCUS || message == WM_KILLFOCUS) {
-        InvalidateRect(hwnd, nullptr, FALSE);
-    }
-    return DefSubclassProc(hwnd, message, wp, lp);
+void updateButtonText(HWND parent, int id, const wchar_t* title) {
+    wchar_t current[128] = {};
+    GetDlgItemTextW(parent, id, current, 128);
+    if (std::wstring(current) != title) SetDlgItemTextW(parent, id, title);
 }
 
 void makeButton(HWND parent, HINSTANCE instance, int id, const wchar_t* title) {
     const auto hwnd = CreateWindowExW(0, L"BUTTON", title, WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_OWNERDRAW,
         0, 0, 100, 40, parent, reinterpret_cast<HMENU>(static_cast<INT_PTR>(id)), instance, nullptr);
-    SetWindowSubclass(hwnd, buttonProcedure, 1, 0);
+    ui::subclassButton(hwnd);
 }
 
 BOOL CALLBACK collectMonitors(HMONITOR monitor, HDC, LPRECT, LPARAM data) {
@@ -165,33 +159,38 @@ void App::layout(Window& window) {
     GetClientRect(window.hwnd, &rect);
     const float w = static_cast<float>(rect.right), h = static_cast<float>(rect.bottom);
     const float s = scale;
-    const auto place = [&](int id, float x, float y, float width, float height) {
-        const auto hwnd = GetDlgItem(window.hwnd, id);
-        ShowWindow(hwnd, window.fullscreen ? SW_HIDE : SW_SHOW);
-        MoveWindow(hwnd, static_cast<int>(x), static_cast<int>(y), static_cast<int>(width), static_cast<int>(height), TRUE);
+    struct Placement { int id; float x, y, width, height; };
+    const Placement positions[] = {
+        {Audience, w - 334 * s, 27 * s, 102 * s, 36 * s},
+        {Fullscreen, w - 220 * s, 27 * s, 92 * s, 36 * s},
+        {OpenSettings, w - 116 * s, 27 * s, 86 * s, 36 * s},
+        {Mute, 30 * s, h - 82 * s, 112 * s, 35 * s},
+        {Reset, w - 294 * s, h - 105 * s, 94 * s, 49 * s},
+        {StartPause, w - 188 * s, h - 105 * s, 158 * s, 49 * s}
     };
-    place(Audience, w - 334 * s, 27 * s, 102 * s, 36 * s);
-    place(Fullscreen, w - 220 * s, 27 * s, 92 * s, 36 * s);
-    place(OpenSettings, w - 116 * s, 27 * s, 86 * s, 36 * s);
-    place(Mute, 30 * s, h - 82 * s, 112 * s, 35 * s);
-    place(Reset, w - 294 * s, h - 105 * s, 94 * s, 49 * s);
-    place(StartPause, w - 188 * s, h - 105 * s, 158 * s, 49 * s);
+    const UINT flags = SWP_NOZORDER | SWP_NOACTIVATE
+                     | (window.fullscreen ? SWP_HIDEWINDOW : SWP_SHOWWINDOW);
+    // Move/show all controls together; MoveWindow(TRUE) painted each separately.
+    HDWP batch = BeginDeferWindowPos(6);
+    for (const auto& p : positions) {
+        if (!batch) break;
+        batch = DeferWindowPos(batch, GetDlgItem(window.hwnd, p.id), nullptr,
+            static_cast<int>(p.x), static_cast<int>(p.y), static_cast<int>(p.width), static_cast<int>(p.height), flags);
+    }
+    if (batch && EndDeferWindowPos(batch)) return;
+    // Allocation failure must still leave the controls usable.
+    for (const auto& p : positions)
+        SetWindowPos(GetDlgItem(window.hwnd, p.id), nullptr, static_cast<int>(p.x), static_cast<int>(p.y),
+                     static_cast<int>(p.width), static_cast<int>(p.height), flags);
 }
 
 void App::paint(Window& window, HDC dc, int width, int height) {
     if (width < 1 || height < 1) return;
     using namespace Gdiplus;
     // GDI backbuffer avoids dependency on a GPU, DirectX, or a browser runtime.
-    const HDC buffer = CreateCompatibleDC(dc);
-    const HBITMAP bitmap = CreateCompatibleBitmap(dc, width, height);
-    if (!buffer || !bitmap) {
-        if (buffer) DeleteDC(buffer);
-        if (bitmap) DeleteObject(bitmap);
-        return;
-    }
-    const auto old = SelectObject(buffer, bitmap);
+    ui::PaintBuffer buffer(dc, RECT{0, 0, width, height});
     {
-        Graphics g(buffer);
+        Graphics g(buffer.dc());
         g.Clear(ui::color(ui::kBackground));
         g.SetSmoothingMode(SmoothingModeAntiAlias);
         g.SetTextRenderingHint(TextRenderingHintAntiAliasGridFit);
@@ -204,20 +203,18 @@ void App::paint(Window& window, HDC dc, int width, int height) {
             ui::drawFooter(g, static_cast<float>(width), static_cast<float>(height), scale, timer, notice);
         }
     }
-    BitBlt(dc, 0, 0, width, height, buffer, 0, 0, SRCCOPY);
-    SelectObject(buffer, old);
-    DeleteObject(bitmap);
-    DeleteDC(buffer);
 }
 
 void App::refresh() {
     if (control.hwnd) {
         std::wstring title = timer.state() == State::Running ? L"暂停" : (timer.state() == State::Paused ? L"继续计时" : L"开始计时");
         if (timer.state() == State::Finished) title = L"再来一轮";
-        SetDlgItemTextW(control.hwnd, StartPause, title.c_str());
-        SetDlgItemTextW(control.hwnd, Mute, muted ? L"声音已静音" : L"声音已开启");
-        SetDlgItemTextW(control.hwnd, Audience, stage.hwnd ? L"关闭投屏" : L"打开投屏");
-        EnableWindow(GetDlgItem(control.hwnd, OpenSettings), timer.state() != State::Running && !settingsOpen);
+        updateButtonText(control.hwnd, StartPause, title.c_str());
+        updateButtonText(control.hwnd, Mute, muted ? L"声音已静音" : L"声音已开启");
+        updateButtonText(control.hwnd, Audience, stage.hwnd ? L"关闭投屏" : L"打开投屏");
+        const auto settings = GetDlgItem(control.hwnd, OpenSettings);
+        const bool enabled = timer.state() != State::Running && !settingsOpen;
+        if ((IsWindowEnabled(settings) != FALSE) != enabled) EnableWindow(settings, enabled);
         InvalidateRect(control.hwnd, nullptr, FALSE);
     }
     if (stage.hwnd) InvalidateRect(stage.hwnd, nullptr, FALSE);
@@ -257,9 +254,8 @@ void App::tick(std::uint64_t now) {
     const auto second = timer.elapsedMs() / 1000;
     if (second != lastPaintSecond) {
         lastPaintSecond = second;
-        const auto title = (timer.ended() ? L"超时 " : L"剩余 ") + formatTime(timer.displaySeconds()) + L" · 小小演讲计时器";
-        if (control.hwnd) SetWindowTextW(control.hwnd, title.c_str());
-        if (stage.hwnd) SetWindowTextW(stage.hwnd, title.c_str());
+        // Keep native captions steady, especially with Windows 7 Basic themes.
+        // The buffered client area displays the live time in both windows.
         refresh();
     }
 }

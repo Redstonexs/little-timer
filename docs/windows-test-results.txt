@@ -1,4 +1,10 @@
 PASS real 32-bit Win32 application initializes
+PASS unchanged refresh does not rewrite button labels
+PASS state change updates only the affected button label
+PASS countdown advances without repainting native window caption
+PASS button erase does not expose an intermediate background frame
+PASS buffered button fully paints corners without dark seams
+PASS buffered button respects destination viewport and bounds
 PASS control.png
 PASS settings available before start
 PASS real start button starts timer
@@ -45,9 +51,9 @@ PASS reset cancels active audio
 PASS generated audio exported as PCM WAV
 PASS generated audio exported as PCM WAV
 PASS stage-small.png
-PASS repainting does not leak GDI objects
+PASS window and button repainting do not leak GDI objects
 PASS closing audience keeps controller alive
 PASS audience can reopen
 PASS closing application releases both windows
 
-50 checks, 0 failures
+56 checks, 0 failures

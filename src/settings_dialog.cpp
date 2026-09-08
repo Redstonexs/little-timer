@@ -51,6 +51,8 @@ void control(HWND parent, const wchar_t* type, const wchar_t* value, int id,
         static_cast<int>(x * s), static_cast<int>(y * s), static_cast<int>(w * s), static_cast<int>(h * s),
         parent, reinterpret_cast<HMENU>(static_cast<INT_PTR>(id)), nullptr, nullptr);
     SendMessageW(child, WM_SETFONT, reinterpret_cast<WPARAM>(font), TRUE);
+    if (std::wstring(type) == L"BUTTON" && (style & BS_TYPEMASK) == BS_OWNERDRAW)
+        ui::subclassButton(child);
     if (edit) {
         SendMessageW(child, EM_SETLIMITTEXT, id == Title ? 80 : 200, 0);
         SendMessageW(child, EM_SETMARGINS, EC_LEFTMARGIN | EC_RIGHTMARGIN, MAKELPARAM(8, 8));
@@ -86,7 +88,7 @@ bool SettingsDialog::show(HWND owner, HINSTANCE instance) {
         WORD windowClass;
         WORD title;
     } resource = {};
-    resource.dialog.style = WS_POPUP | WS_CAPTION | WS_SYSMENU | DS_MODALFRAME | DS_CENTER;
+    resource.dialog.style = WS_POPUP | WS_CAPTION | WS_SYSMENU | WS_CLIPCHILDREN | DS_MODALFRAME | DS_CENTER;
     resource.dialog.dwExtendedStyle = WS_EX_CONTROLPARENT;
     resource.dialog.cx = 350;
     resource.dialog.cy = 370;
@@ -175,7 +177,7 @@ INT_PTR CALLBACK SettingsDialog::procedure(HWND hwnd, UINT msg, WPARAM wp, LPARA
         label(hwnd, L"%", 514, 364, 28, 24, f, s);
         checkbox(hwnd, L"时段提醒 · 柔和双音", ReminderSound, 28, 410, 288, v.reminderSound, f, s);
         control(hwnd, L"BUTTON", L"试听提醒音", PreviewGentle, 382, 406, 160, 32, BS_OWNERDRAW, f, s);
-        checkbox(hwnd, L"结束提醒 · 清晰三音", EndSound, 28, 452, 288, v.endSound, f, s);
+        checkbox(hwnd, L"结束提醒 · 连续铃响", EndSound, 28, 452, 288, v.endSound, f, s);
         control(hwnd, L"BUTTON", L"试听结束音", PreviewEnd, 382, 448, 160, 32, BS_OWNERDRAW, f, s);
         checkbox(hwnd, L"到时后继续显示超时时长", Overtime, 28, 496, 500, v.overtime, f, s);
         checkbox(hwnd, L"记住设置（在 EXE 旁保存配置文件）", Remember, 28, 531, 514, self->remember, f, s);
@@ -208,7 +210,7 @@ INT_PTR CALLBACK SettingsDialog::procedure(HWND hwnd, UINT msg, WPARAM wp, LPARA
             else if (volume == 0) message = L"当前音量为 0；调高音量后即可试听。";
             else if (!self->audio.play(id == PreviewGentle ? Sound::Gentle : Sound::End, volume))
                 message = L"无法播放声音，请检查扬声器或音频输出设备。";
-            else message = id == PreviewGentle ? L"正在试听柔和提醒音…" : L"正在试听结束音…";
+            else message = id == PreviewGentle ? L"正在试听柔和提醒音…" : L"正在试听结束铃声…";
             SetDlgItemTextW(hwnd, Feedback, message.c_str());
             return TRUE;
         }

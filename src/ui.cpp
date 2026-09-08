@@ -9,6 +9,25 @@ namespace little_timer {
 namespace ui {
 namespace {
 
+LRESULT CALLBACK buttonProcedure(HWND hwnd, UINT message, WPARAM wp, LPARAM lp,
+                                 UINT_PTR id, DWORD_PTR hovered) {
+    // The owner draws the background and foreground in one buffered frame.
+    if (message == WM_ERASEBKGND) return 1;
+    if (message == WM_MOUSEMOVE && !hovered) {
+        TRACKMOUSEEVENT tracking = {sizeof(tracking), TME_LEAVE, hwnd, 0};
+        if (TrackMouseEvent(&tracking)) SetWindowSubclass(hwnd, buttonProcedure, id, 1);
+        InvalidateRect(hwnd, nullptr, FALSE);
+    } else if (message == WM_MOUSELEAVE) {
+        SetWindowSubclass(hwnd, buttonProcedure, id, 0);
+        InvalidateRect(hwnd, nullptr, FALSE);
+    } else if (message == WM_SETFOCUS || message == WM_KILLFOCUS) {
+        InvalidateRect(hwnd, nullptr, FALSE);
+    } else if (message == WM_NCDESTROY) {
+        RemoveWindowSubclass(hwnd, buttonProcedure, id);
+    }
+    return DefSubclassProc(hwnd, message, wp, lp);
+}
+
 void roundedPath(GraphicsPath& path, RectF rect, float radius) {
     const float d = std::min(radius * 2, std::min(rect.Width, rect.Height));
     path.AddArc(rect.X, rect.Y, d, d, 180, 90);
@@ -34,6 +53,35 @@ void digits(Graphics& g, const std::wstring& value, RectF area, COLORREF ink) {
 }
 
 } // namespace
+
+PaintBuffer::PaintBuffer(HDC target, const RECT& area) : target_(target), area_(area) {
+    const int width = area.right - area.left, height = area.bottom - area.top;
+    if (width <= 0 || height <= 0) return;
+    memory_ = CreateCompatibleDC(target);
+    bitmap_ = CreateCompatibleBitmap(target, width, height);
+    if (!memory_ || !bitmap_) {
+        if (memory_) DeleteDC(memory_);
+        if (bitmap_) DeleteObject(bitmap_);
+        memory_ = nullptr;
+        bitmap_ = nullptr;
+        return;
+    }
+    previous_ = SelectObject(memory_, bitmap_);
+    SetWindowOrgEx(memory_, area.left, area.top, nullptr);
+}
+
+PaintBuffer::~PaintBuffer() {
+    if (!memory_) return;
+    BitBlt(target_, area_.left, area_.top, area_.right - area_.left, area_.bottom - area_.top,
+           memory_, area_.left, area_.top, SRCCOPY);
+    SelectObject(memory_, previous_);
+    DeleteObject(bitmap_);
+    DeleteDC(memory_);
+}
+
+void subclassButton(HWND hwnd) {
+    SetWindowSubclass(hwnd, buttonProcedure, 1, 0);
+}
 
 Color color(COLORREF value, BYTE alpha) {
     return Color(alpha, GetRValue(value), GetGValue(value), GetBValue(value));
@@ -76,12 +124,12 @@ void logo(Graphics& g, float x, float y, float size) {
 }
 
 void button(const DRAWITEMSTRUCT& item, bool primary, bool selected, float scale) {
-    Graphics g(item.hDC);
+    PaintBuffer buffer(item.hDC, item.rcItem);
+    Graphics g(buffer.dc());
+    // Clear every pixel, including antialiased corners of the rounded button.
+    g.Clear(color(kBackground));
     g.SetSmoothingMode(SmoothingModeAntiAlias);
     g.SetTextRenderingHint(TextRenderingHintAntiAliasGridFit);
-    SolidBrush background(color(kBackground));
-    g.FillRectangle(&background, Rect(static_cast<INT>(item.rcItem.left), static_cast<INT>(item.rcItem.top),
-                    static_cast<INT>(item.rcItem.right - item.rcItem.left), static_cast<INT>(item.rcItem.bottom - item.rcItem.top)));
     const bool disabled = (item.itemState & ODS_DISABLED) != 0;
     const bool pressed = (item.itemState & ODS_SELECTED) != 0;
     const bool focused = (item.itemState & ODS_FOCUS) != 0;
@@ -92,7 +140,8 @@ void button(const DRAWITEMSTRUCT& item, bool primary, bool selected, float scale
     const COLORREF fill = primary ? (pressed ? RGB(128, 171, 215) : kBlue)
                          : ((hovered || pressed || selected) ? kHover : kPanel);
     const COLORREF ink = disabled ? RGB(99, 115, 139) : (primary ? kBackground : kText);
-    const RectF rect(1, 1, static_cast<float>(item.rcItem.right - item.rcItem.left - 2),
+    const RectF rect(static_cast<float>(item.rcItem.left + 1), static_cast<float>(item.rcItem.top + 1),
+                          static_cast<float>(item.rcItem.right - item.rcItem.left - 2),
                           static_cast<float>(item.rcItem.bottom - item.rcItem.top - 2));
     roundRect(g, rect, 9 * scale, disabled ? kPanel : fill, focused ? kBlue : (primary ? fill : kLine));
     wchar_t label[128] = {};
@@ -106,12 +155,13 @@ void button(const DRAWITEMSTRUCT& item, bool primary, bool selected, float scale
 }
 
 void checkbox(HDC dc, HWND hwnd, float scale) {
-    Graphics g(dc);
+    RECT client;
+    GetClientRect(hwnd, &client);
+    PaintBuffer buffer(dc, client);
+    Graphics g(buffer.dc());
     g.Clear(color(kBackground));
     g.SetSmoothingMode(SmoothingModeAntiAlias);
     g.SetTextRenderingHint(TextRenderingHintAntiAliasGridFit);
-    RECT client;
-    GetClientRect(hwnd, &client);
     const float size = 16 * scale;
     const float y = (client.bottom - size) / 2;
     const bool checked = SendMessageW(hwnd, BM_GETCHECK, 0, 0) == BST_CHECKED;

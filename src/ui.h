@@ -16,6 +16,25 @@ constexpr COLORREF kBlue = RGB(166, 202, 239);
 constexpr COLORREF kAmber = RGB(244, 196, 119);
 constexpr COLORREF kRed = RGB(255, 128, 120);
 
+// Paint a complete frame in memory, then copy it to the destination once.
+// Keeps the destination's viewport and clipping (including child windows).
+class PaintBuffer {
+public:
+    PaintBuffer(HDC target, const RECT& area);
+    ~PaintBuffer();
+    PaintBuffer(const PaintBuffer&) = delete;
+    PaintBuffer& operator=(const PaintBuffer&) = delete;
+    HDC dc() const { return memory_ ? memory_ : target_; }
+
+private:
+    HDC target_;
+    RECT area_;
+    HDC memory_ = nullptr;
+    HBITMAP bitmap_ = nullptr;
+    HGDIOBJ previous_ = nullptr;
+};
+
+void subclassButton(HWND hwnd);
 Gdiplus::Color color(COLORREF value, BYTE alpha = 255);
 void text(Gdiplus::Graphics& g, const std::wstring& value, Gdiplus::RectF rect,
           float size, COLORREF ink = kText, bool bold = false,

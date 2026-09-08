@@ -18,7 +18,7 @@ struct Window {
     bool audience = false;
     bool fullscreen = false;
     WINDOWPLACEMENT placement = {};
-    DWORD style = WS_OVERLAPPEDWINDOW;
+    DWORD style = WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN;
 };
 
 struct App {
