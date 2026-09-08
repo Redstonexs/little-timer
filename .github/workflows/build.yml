@@ -16,7 +16,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Install cross compiler
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends g++-mingw-w64-i686
       - name: Test timer and audio with sanitizers
@@ -28,7 +28,7 @@ jobs:
       - name: Generate executable checksum
         working-directory: dist
         run: sha256sum LittleTimer.exe > LittleTimer.exe.sha256
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: LittleTimer-portable-win32
           if-no-files-found: error
@@ -37,7 +37,7 @@ jobs:
             dist/LittleTimer.exe.sha256
             README.md
             LICENSE
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: native-test-tools
           if-no-files-found: error
@@ -51,8 +51,8 @@ jobs:
     runs-on: windows-2022
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v4
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
         with:
           name: native-test-tools
           path: build
@@ -63,7 +63,7 @@ jobs:
           -Executable "$pwd\build\LittleTimerQA.exe"
           -OutputDirectory "$pwd\build\windows-qa"
           -CoreTests "$pwd\build\timer_tests.exe"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: windows-verification

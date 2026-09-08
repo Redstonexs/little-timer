@@ -8,9 +8,9 @@ namespace little_timer {
 std::vector<std::int16_t> synthesize(Sound sound, int volume) {
     constexpr double pi = 3.14159265358979323846;
     const bool gentle = sound == Sound::Gentle;
-    const double duration = gentle ? 1.8 : 3.4;
+    const double duration = gentle ? 1.8 : 2.2;
     // Integer sample counts are consistent on x87 (32-bit Windows) and SSE.
-    const int sampleCount = kSampleRate * (gentle ? 180 : 340) / 100;
+    const int sampleCount = kSampleRate * (gentle ? 180 : 220) / 100;
     std::vector<std::int16_t> samples(static_cast<std::size_t>(sampleCount));
     const double volumeGain = std::max(0, std::min(100, volume)) / 100.0;
     if (volumeGain == 0) return samples;
@@ -31,14 +31,14 @@ std::vector<std::int16_t> synthesize(Sound sound, int volume) {
                        + 0.16 * std::sin(2 * pi * frequency * 2 * t));
             }
         } else {
-            // Four bell strikes with overlapping tails. Inharmonic partials
+            // Two bell strikes with overlapping tails. Inharmonic partials
             // and faster-decaying high frequencies produce a metallic ring.
             struct Partial { double ratio, weight, decay; };
             constexpr Partial partials[] = {
                 {1.00, 0.95, 1.5}, {2.01, 0.32, 2.2}, {2.74, 0.22, 3.0},
                 {4.07, 0.12, 3.7}, {5.43, 0.06, 4.5}
             };
-            for (int strike = 0; strike < 4; ++strike) {
+            for (int strike = 0; strike < 2; ++strike) {
                 const double t = time - strike * 0.6;
                 if (t < 0) continue;
                 const double attack = std::min(1.0, t / 0.005);
